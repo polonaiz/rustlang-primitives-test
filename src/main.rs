@@ -5,7 +5,7 @@ fn main() {}
 
 #[test]
 fn test_read_file() {
-    let path = std::path::Path::new("./src/test.txt");
+    let path = std::path::Path::new("./asset/test.txt");
     let mut file = std::fs::File::open(path).unwrap();
 
     let mut buf = [0; 1024];
@@ -16,7 +16,7 @@ fn test_read_file() {
 
 #[test]
 fn test_read_file_using_reader() {
-    let path = std::path::Path::new("./src/test.txt");
+    let path = std::path::Path::new("./asset/test.txt");
     let file = std::fs::File::open(path).unwrap();
     let mut reader = std::io::BufReader::new(file);
 
