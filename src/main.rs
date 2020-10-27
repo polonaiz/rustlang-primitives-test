@@ -105,7 +105,7 @@ fn test_drain_gz_file_from_ftp() {
     let reader = std::io::BufReader::new(gz_decoder);
 
     for line in reader.lines().take(65).map(|result| result.unwrap()) {
-        println!("{}", &compact_line(line));
+        println!("{}", &compact_line(&line));
     }
 }
 
@@ -114,23 +114,28 @@ fn test_parse_file() {
     let path = std::path::Path::new("./asset/large/mysqldump.sql.gz");
     let file = std::fs::File::open(path).unwrap();
     let gz_decoder = GzDecoder::new(file);
-    let reader = std::io::BufReader::new(gz_decoder);
+    let file_reader = std::io::BufReader::new(gz_decoder);
 
     let mut line_num = 0;
-    for line in reader.lines().take(65).map(|result| result.unwrap()) {
+    for line in file_reader.lines().take(65).map(|result| result.unwrap()) {
         line_num += 1;
 
-        println!("{}: {}", line_num, &compact_line(line));
+        println!("{}: {}", line_num, &compact_line(&line));
+        if line.starts_with("INSERT INTO ") {
+            // let line_reader = std::io::BufReader::new(stringreader::StringReader::new(&line));
+            println!("  ---->");
+        }
     }
 }
 
-fn compact_line(line: String) -> String {
+fn compact_line(line: &String) -> String {
+    let mut output = String::new();
+
     let lhs_size = 100;
     let rhs_size = 100;
     if line.len() <= lhs_size + rhs_size {
-        line
+        output.push_str(&line);
     } else {
-        let mut output = String::new();
         output.push_str(&line.chars().take(lhs_size).collect::<String>());
         output.push_str(".............................");
         output.push_str(
@@ -143,6 +148,6 @@ fn compact_line(line: String) -> String {
                 .rev()
                 .collect::<String>(),
         );
-        output
     }
+    output
 }
