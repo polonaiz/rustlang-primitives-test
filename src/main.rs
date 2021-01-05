@@ -1,6 +1,8 @@
 use flate2::read::GzDecoder;
+use itertools::Itertools;
 use std::io::BufRead;
-use std::io::Read;
+use std::io::Write;
+use std::{io::Read, process::Command};
 
 fn main() {}
 
@@ -66,6 +68,7 @@ fn test_read_gz_file_from_ftp() {
 }
 
 #[test]
+#[ignore]
 fn test_drain_large_file() {
     let path = std::path::Path::new("large.sql.gz");
     let mut file = std::fs::File::open(path).unwrap();
@@ -80,6 +83,7 @@ fn test_drain_large_file() {
 }
 
 #[test]
+#[ignore]
 fn test_drain_large_file_using_reader() {
     let path = std::path::Path::new("asset/large/mysqldump.sql.gz");
     let file = std::fs::File::open(path).unwrap();
@@ -92,6 +96,7 @@ fn test_drain_large_file_using_reader() {
 }
 
 #[test]
+#[ignore]
 fn test_drain_gz_file_from_ftp() {
     let ftp_addr = "localhost:21";
     let ftp_user = "myuser";
@@ -110,6 +115,7 @@ fn test_drain_gz_file_from_ftp() {
 }
 
 #[test]
+#[ignore]
 fn test_parse_file() {
     let path = std::path::Path::new("./asset/large/mysqldump.sql.gz");
     let file = std::fs::File::open(path).unwrap();
@@ -150,4 +156,149 @@ fn compact_line(line: &String) -> String {
         );
     }
     output
+}
+
+#[test]
+fn require_mysql_56() {
+    let command = format!("docker ps -q --filter name=mysql-5.6");
+    let output = Command::new("sh").arg("-c").arg(&command).output().unwrap();
+    let stdout = String::from_utf8(output.stdout)
+        .unwrap()
+        .trim_end()
+        .to_string();
+    let stdoutlen = stdout.len();
+    let mysql_exists = stdoutlen > 0;
+    if !mysql_exists {
+        let command = format!("docker run --rm -d -e MYSQL_ROOT_PASSWORD=mysql-password -v /tmp:/tmp -p 33061:3306 --name 'mysql-5.6' mysql:5.6");
+        let output = Command::new("sh").arg("-c").arg(&command).output().unwrap();
+        println!(
+            "command: {}\n output: {}",
+            command,
+            match output.status.code().unwrap() {
+                0 => String::from_utf8(output.stdout)
+                    .unwrap()
+                    .trim_end()
+                    .to_string(),
+                _ => String::from_utf8(output.stderr)
+                    .unwrap()
+                    .trim_end()
+                    .to_string(),
+            }
+        );
+
+        // wait start mysql
+        std::thread::sleep(std::time::Duration::from_secs(15));
+        println!("mysql started.");
+    } else {
+        println!("mysql already started.");
+    }
+}
+
+#[test]
+fn execute_mysql_56() {
+    let command = format!(
+        "docker exec mysql-5.6 sh -c '{}'",
+        "cat /tmp/mysql.setup.sql | MYSQL_PWD=mysql-password mysql"
+    );
+    let output = Command::new("sh").arg("-c").arg(&command).output().unwrap();
+    println!(
+        "command: {}\n output: {}",
+        command,
+        match output.status.code().unwrap() {
+            0 => String::from_utf8(output.stdout)
+                .unwrap()
+                .trim_end()
+                .to_string(),
+            _ => String::from_utf8(output.stderr)
+                .unwrap()
+                .trim_end()
+                .to_string(),
+        }
+    );
+}
+
+#[test]
+pub fn test_write_data_file() {
+    require_mysql_56();
+
+    // setup.sql
+    let path = std::path::Path::new("/tmp/mysql.setup.sql");
+    let mut file = std::fs::File::create(path).unwrap();
+
+    // test table schema
+    let columns = vec![
+        Column {
+            name: "bigint_col",
+            data_type: "BIGINT",
+        },
+        Column {
+            name: "varchar_col",
+            data_type: "VARCHAR(255)",
+        },
+    ];
+
+    let sql = "CREATE DATABASE IF NOT EXISTS TEST;\n";
+    println!("{}", sql.trim_end());
+    file.write(sql.as_bytes()).unwrap();
+
+    let sql = "USE TEST;\n";
+    println!("{}", sql.trim_end());
+    file.write(sql.as_bytes()).unwrap();
+
+    let sql = "DROP TABLE IF EXISTS TEST;\n";
+    println!("{}", sql);
+    file.write(sql.as_bytes()).unwrap();
+
+    // create table
+    let mut sql = String::new();
+    sql.push_str("CREATE TABLE TEST (\n");
+    sql.push_str(
+        columns
+            .iter()
+            .map(|column| format!("  {} {}", column.name, column.data_type))
+            .join(",\n")
+            .as_str(),
+    );
+    sql.push_str("\n);\n");
+    println!("{}", sql.trim_end());
+    file.write(sql.as_bytes()).unwrap();
+
+    // insert
+    for idx in 0..10 {
+        let vals = vec![
+            idx.to_string(),
+            format!("'{:x}'", md5::compute(idx.to_string())),
+        ];
+        let mut sql = String::new();
+        sql.push_str("INSERT INTO TEST VALUES (");
+        sql.push_str(vals.iter().join(",").as_str());
+        sql.push_str(");\n");
+        println!("{}", sql.trim_end());
+        file.write(sql.as_bytes()).unwrap();
+    }
+
+    let command = format!(
+        "docker exec mysql-5.6 sh -c '{}'",
+        "cat /tmp/mysql.setup.sql | MYSQL_PWD=mysql-password mysql"
+    );
+    let output = Command::new("sh").arg("-c").arg(&command).output().unwrap();
+    println!(
+        "command: {}\n output: {}",
+        command,
+        match output.status.code().unwrap() {
+            0 => String::from_utf8(output.stdout)
+                .unwrap()
+                .trim_end()
+                .to_string(),
+            _ => String::from_utf8(output.stderr)
+                .unwrap()
+                .trim_end()
+                .to_string(),
+        }
+    );
+}
+
+struct Column {
+    name: &'static str,
+    data_type: &'static str,
 }

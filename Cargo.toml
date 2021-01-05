@@ -9,3 +9,5 @@ edition = "2018"
 [dependencies]
 ftp = "3.0.1"
 flate2 = { version = "1.0", features = ["zlib"], default-features = false }
+md5 = "0.7.0"
+itertools = "*"

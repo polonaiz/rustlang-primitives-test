@@ -16,3 +16,5 @@ Cargo.lock
 
 #
 /asset/large
+.vscode/launch.json
+.vscode/tasks.json
